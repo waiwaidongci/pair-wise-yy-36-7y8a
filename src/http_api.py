@@ -89,6 +89,18 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, {"records": service.list_records(item_id, role)})
+                elif path.startswith("/api/items/") and "/remediations" in path:
+                    parts = path.split("/")
+                    item_id = int(parts[3])
+                    actor, role = self._identity()
+                    del actor
+                    if len(parts) > 5 and parts[5]:
+                        remediation_id = int(parts[5])
+                        self._json(200, service.get_remediation(
+                            item_id, remediation_id, role))
+                    else:
+                        self._json(200, {"remediations": service.list_remediations(
+                            item_id, role)})
                 elif path.startswith("/api/items/"):
                     item_id = int(path.rsplit("/", 1)[-1])
                     actor, role = self._identity()
@@ -118,7 +130,27 @@ def make_handler(service: Service, static_dir: str):
                     target = body.get("target")
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
-                        item_id, target, expected, actor, role))
+                        item_id, target, expected, actor, role,
+                        body.get("remediation")))
+                elif path.startswith("/api/items/") and path.endswith("/parameters"):
+                    item_id = int(path.split("/")[3])
+                    self._json(200, service.update_parameters(item_id, body, actor, role))
+                elif path.startswith("/api/items/") and "/remediations/" in path:
+                    parts = path.split("/")
+                    item_id = int(parts[3])
+                    remediation_id = int(parts[5])
+                    action = parts[6] if len(parts) > 6 else ""
+                    if action == "retest":
+                        self._json(201, service.submit_retest(
+                            item_id, remediation_id, body, actor, role))
+                    elif action == "amend":
+                        self._json(200, service.amend_remediation(
+                            item_id, remediation_id, body, actor, role))
+                    elif action == "close":
+                        self._json(200, service.close_remediation(
+                            item_id, remediation_id, actor, role))
+                    else:
+                        self._json(404, {"error": "not_found"})
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:

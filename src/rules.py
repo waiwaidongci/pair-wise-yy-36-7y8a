@@ -1,8 +1,10 @@
 from __future__ import annotations
-from .domain import ConflictError, ValidationError
+from .domain import ConflictError, ValidationError, as_datetime
 TITLE='企业排污许可与超标处置'; ENTITY='排污事件'; ID_PREFIX='ED'
 SEVERITIES=['normal', 'watch', 'exceedance', 'major']; STATES=['reported', 'assessing', 'remediation', 'inspection', 'closed']; TRANSITIONS={'reported': ['assessing'], 'assessing': ['remediation'], 'remediation': ['inspection'], 'inspection': ['closed'], 'closed': []}; TRANSITION_ROLES={'assessing': ['compliance_officer'], 'remediation': ['operator'], 'inspection': ['compliance_officer'], 'closed': ['director']}
 CREATE_ROLES=set(['operator', 'compliance_officer']); RECORD_ROLES=set(['operator', 'compliance_officer']); AUDIT_ROLES=set(['director', 'viewer']); VIEW_ROLES=set(['operator', 'compliance_officer', 'director', 'viewer'])
+RETEST_ROLES=set(['operator', 'compliance_officer']); AMEND_ROLES=set(['compliance_officer', 'director']); CLOSE_ROLES=set(['operator', 'compliance_officer', 'director']); PARAMETER_ROLES=set(['operator', 'compliance_officer'])
+REMEDIATION_STATUSES=['open', 'closed']; ASSESSMENT_KINDS=['retest', 'rejudgment']; ASSESSMENT_STATUSES=['valid', 'invalidated', 'superseded']; VERDICTS=['pass', 'fail']
 SEVERITY_WEIGHT={'normal': 1.0, 'watch': 3.0, 'exceedance': 6.0, 'major': 9.0}; DEADLINE_HOURS={'normal': 72, 'watch': 24, 'exceedance': 8, 'major': 4}; TERMINAL_STATES=set(['closed'])
 def priority_score(severity,quantity=0.0,threshold=1.0,open_records=0):
     if severity not in SEVERITY_WEIGHT: raise ValidationError("unknown severity")
@@ -20,3 +22,10 @@ def validate_transition(current,target):
     if not can_transition(current,target): raise ConflictError(f"不能从{current}转换到{target}")
 def completion_blockers(target,open_records): return ["仍有未关闭事项"] if target in TERMINAL_STATES and open_records>0 else []
 def role_for_transition(target): return set(TRANSITION_ROLES.get(target,[]))
+def retest_verdict(value,threshold): return 'fail' if value>threshold else 'pass'
+def inspection_blockers(remediation,assessment,now):
+    if remediation is None: return []
+    if assessment is None:
+        return ["逾期未交复测"] if now>as_datetime(remediation["due_at"]) else ["复测未提交"]
+    if assessment["verdict"]!=VERDICTS[0]: return ["新监测读数仍高于许可限值"]
+    return ["整改未由复核人关闭"]

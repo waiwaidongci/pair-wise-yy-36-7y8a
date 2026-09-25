@@ -4,6 +4,7 @@ from src.domain import ConflictError, PermissionDenied
 from src.repository import Repository
 from src.service import Service
 from src.rules import STATES, TRANSITION_ROLES
+FUTURE="2099-01-01T00:00:00Z"
 class FailureTest(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory(); self.repo=Repository(str(Path(self.tmp.name)/"test.db")); self.service=Service(self.repo)
@@ -15,7 +16,11 @@ class FailureTest(unittest.TestCase):
         payload={"kind":"action","detail":"same reference","status":"open","external_ref":"DUP-1"}
         self.service.add_record(self.item["id"],payload,"recorder",'operator')
         with self.assertRaises(ConflictError): self.service.add_record(self.item["id"],payload,"recorder",'operator')
-        current=self.service.get_item(self.item["id"],"viewer")
-        for target in STATES[1:-1]: current=self.service.transition(current["id"],target,current["version"],"reviewer",TRANSITION_ROLES[target][0])
+        current=self.service.transition(self.item["id"],STATES[1],self.item["version"],"reviewer",TRANSITION_ROLES[STATES[1]][0])
+        current=self.service.transition(current["id"],STATES[2],current["version"],"reviewer",TRANSITION_ROLES[STATES[2]][0],{"assignee":"worker","reviewer":"checker","due_at":FUTURE})
+        remediation=self.service.list_remediations(current["id"],"viewer")[0]
+        self.service.submit_retest(current["id"],remediation["id"],{"value":4},"retester",'operator')
+        self.service.close_remediation(current["id"],remediation["id"],"checker",'compliance_officer')
+        current=self.service.transition(current["id"],STATES[3],current["version"],"reviewer",TRANSITION_ROLES[STATES[3]][0])
         with self.assertRaises(ConflictError): self.service.transition(current["id"],STATES[-1],current["version"],"reviewer",TRANSITION_ROLES[STATES[-1]][0])
 if __name__=="__main__": unittest.main()
