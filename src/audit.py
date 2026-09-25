@@ -9,6 +9,10 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def utc_now_dt() -> datetime:
+    return datetime.now(timezone.utc).replace(microsecond=0)
+
+
 def calculate_hash(previous_hash: str, payload: dict) -> str:
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     return hashlib.sha256((previous_hash + ":").encode("utf-8") + raw).hexdigest()
